@@ -6,4 +6,3 @@ prometheus-client==0.20.0
 scikit-learn==1.5.0
 joblib==1.4.2
 numpy==2.0.0
-anthropic==0.31.0

@@ -29,9 +29,6 @@ class RequestAnalyzer:
         if self.strategy == "ml":
             from model import BotClassifier
             self.classifier = BotClassifier()
-        elif self.strategy == "llm":
-            import anthropic
-            self.anthropic = anthropic.AsyncAnthropic()
 
     async def extract_features(self, request, body: bytes) -> dict:
         ip = request.client.host
@@ -100,25 +97,38 @@ class RequestAnalyzer:
         return AnalysisResult(blocked, score, "ml", "ml_detection" if blocked else "")
 
     async def _llm(self, f: dict) -> AnalysisResult:
+        import httpx
+
+        ollama_url = os.getenv("OLLAMA_URL", "http://ollama-svc:11434")
+        ollama_model = os.getenv("OLLAMA_MODEL", "llama3.2:1b")
+
         features_str = json.dumps(
             {k: v for k, v in f.items() if k not in ("ip", "timestamp")},
             indent=2,
         )
-        response = await self.anthropic.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=64,
-            system=(
-                "You are a bot detection system. Analyze HTTP request features and respond with "
-                "exactly one of: BOT:<score> or HUMAN:<score> where score is 0.00-1.00. Nothing else."
-            ),
-            messages=[{"role": "user", "content": f"Features:\n{features_str}"}],
+        prompt = (
+            "You are a bot detection system. Analyze the HTTP request features below and respond "
+            "with exactly one of: BOT:<score> or HUMAN:<score> where score is 0.00-1.00. Nothing else.\n\n"
+            f"Features:\n{features_str}"
         )
-        text = response.content[0].text.strip()
         try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                resp = await client.post(
+                    f"{ollama_url}/api/chat",
+                    json={
+                        "model": ollama_model,
+                        "messages": [{"role": "user", "content": prompt}],
+                        "stream": False,
+                    },
+                )
+                resp.raise_for_status()
+                text = resp.json()["message"]["content"].strip()
+
             verdict, score_str = text.split(":")
             score = float(score_str)
             blocked = verdict == "BOT" and score >= DETECTION_THRESHOLD
-        except Exception:
+        except Exception as e:
+            logger.warning(f"LLM analysis failed: {e}")
             blocked, score = False, 0.0
 
         return AnalysisResult(blocked, score, "llm", "llm_detection" if blocked else "")

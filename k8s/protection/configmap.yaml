@@ -2,7 +2,7 @@
 #   rate_limit  — tylko ograniczenie liczby zapytań
 #   rules       — detekcja heurystyczna (UA, nagłówki, częstotliwość)
 #   ml          — Random Forest na cechach zapytania
-#   llm         — analiza przez Claude (claude-haiku-4-5)
+#   llm         — analiza przez lokalne Ollama (llama3.2:1b, darmowe)
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -14,3 +14,5 @@ data:
   DETECTION_THRESHOLD: "0.7"
   WEBAPP_URL: "http://webapp-svc.aisys-webapp.svc.cluster.local:8080"
   REDIS_URL: "redis://redis-svc.aisys-protection.svc.cluster.local:6379"
+  OLLAMA_URL: "http://ollama-svc.aisys-protection.svc.cluster.local:11434"
+  OLLAMA_MODEL: "llama3.2:1b"

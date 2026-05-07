@@ -1,0 +1,70 @@
+# Ollama — lokalny serwer LLM, darmowy, działa bez internetu po pobraniu modelu.
+# Model llama3.2:1b (~600 MB) jest pobierany automatycznie przy pierwszym starcie.
+# Pierwsze uruchomienie zajmuje kilka minut — poczekaj na gotowość poda.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ollama
+  namespace: aisys-protection
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ollama
+  template:
+    metadata:
+      labels:
+        app: ollama
+    spec:
+      initContainers:
+        - name: pull-model
+          image: ollama/ollama:latest
+          command:
+            - /bin/sh
+            - -c
+            - |
+              ollama serve &
+              echo "Czekam na start Ollama..."
+              until ollama list 2>/dev/null; do sleep 2; done
+              echo "Pobieram model llama3.2:1b..."
+              ollama pull llama3.2:1b
+              echo "Model gotowy."
+          volumeMounts:
+            - name: ollama-data
+              mountPath: /root/.ollama
+      containers:
+        - name: ollama
+          image: ollama/ollama:latest
+          ports:
+            - containerPort: 11434
+          volumeMounts:
+            - name: ollama-data
+              mountPath: /root/.ollama
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "2000m"
+              memory: "2Gi"
+          livenessProbe:
+            httpGet:
+              path: /api/tags
+              port: 11434
+            initialDelaySeconds: 15
+            periodSeconds: 15
+      volumes:
+        - name: ollama-data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ollama-svc
+  namespace: aisys-protection
+spec:
+  selector:
+    app: ollama
+  ports:
+    - port: 11434
+      targetPort: 11434
