@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: aisys-webapp
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: aisys-protection
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: aisys-bots
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: aisys-monitoring

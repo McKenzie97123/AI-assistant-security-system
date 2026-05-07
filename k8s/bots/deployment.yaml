@@ -1,0 +1,30 @@
+# Skaluj replicas (1 / 3 / 5 / 10) żeby zmieniać intensywność ataku
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spam-bots
+  namespace: aisys-bots
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: spam-bots
+  template:
+    metadata:
+      labels:
+        app: spam-bots
+    spec:
+      containers:
+        - name: spam-bot
+          image: aisys/bots:latest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: bots-config
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "128Mi"

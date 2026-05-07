@@ -1,0 +1,142 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasource
+  namespace: aisys-monitoring
+data:
+  datasource.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        url: http://prometheus-svc.aisys-monitoring.svc.cluster.local:9090
+        isDefault: true
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-provider
+  namespace: aisys-monitoring
+data:
+  provider.yaml: |
+    apiVersion: 1
+    providers:
+      - name: AIsys
+        type: file
+        options:
+          path: /var/lib/grafana/dashboards
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard
+  namespace: aisys-monitoring
+data:
+  aisys.json: |
+    {
+      "title": "AIsys Bot Protection",
+      "uid": "aisys-main",
+      "panels": [
+        {
+          "id": 1, "type": "stat", "title": "Block Rate",
+          "gridPos": {"x": 0, "y": 0, "w": 6, "h": 4},
+          "targets": [{
+            "expr": "sum(rate(proxy_requests_total{result=\"blocked\"}[1m])) / sum(rate(proxy_requests_total[1m]))",
+            "legendFormat": "block rate"
+          }],
+          "fieldConfig": {"defaults": {"unit": "percentunit"}}
+        },
+        {
+          "id": 2, "type": "graph", "title": "Requests / sec",
+          "gridPos": {"x": 6, "y": 0, "w": 18, "h": 8},
+          "targets": [
+            {"expr": "sum(rate(proxy_requests_total{result=\"allowed\"}[30s]))", "legendFormat": "allowed"},
+            {"expr": "sum(rate(proxy_requests_total{result=\"blocked\"}[30s]))", "legendFormat": "blocked"}
+          ]
+        },
+        {
+          "id": 3, "type": "graph", "title": "Detection Latency (p50/p95/p99)",
+          "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+          "targets": [
+            {"expr": "histogram_quantile(0.50, rate(proxy_detection_latency_seconds_bucket[1m]))", "legendFormat": "p50"},
+            {"expr": "histogram_quantile(0.95, rate(proxy_detection_latency_seconds_bucket[1m]))", "legendFormat": "p95"},
+            {"expr": "histogram_quantile(0.99, rate(proxy_detection_latency_seconds_bucket[1m]))", "legendFormat": "p99"}
+          ],
+          "fieldConfig": {"defaults": {"unit": "s"}}
+        },
+        {
+          "id": 4, "type": "graph", "title": "Blocks by Detection Method",
+          "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+          "targets": [
+            {"expr": "sum by (method)(rate(proxy_blocked_by_method_total[1m]))", "legendFormat": "{{method}}"}
+          ]
+        }
+      ],
+      "time": {"from": "now-15m", "to": "now"},
+      "refresh": "10s"
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: aisys-monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+    spec:
+      containers:
+        - name: grafana
+          image: grafana/grafana:11.0.0
+          ports:
+            - containerPort: 3000
+          env:
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              value: "admin123"
+            - name: GF_AUTH_ANONYMOUS_ENABLED
+              value: "true"
+            - name: GF_AUTH_ANONYMOUS_ORG_ROLE
+              value: "Viewer"
+          volumeMounts:
+            - name: datasource
+              mountPath: /etc/grafana/provisioning/datasources
+            - name: dashboard-provider
+              mountPath: /etc/grafana/provisioning/dashboards
+            - name: dashboard
+              mountPath: /var/lib/grafana/dashboards
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+      volumes:
+        - name: datasource
+          configMap:
+            name: grafana-datasource
+        - name: dashboard-provider
+          configMap:
+            name: grafana-dashboard-provider
+        - name: dashboard
+          configMap:
+            name: grafana-dashboard
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana-svc
+  namespace: aisys-monitoring
+spec:
+  selector:
+    app: grafana
+  ports:
+    - port: 3000
+      targetPort: 3000
+  type: NodePort

@@ -1,0 +1,16 @@
+# Zmieniaj PROTECTION_STRATEGY między eksperymentami:
+#   rate_limit  — tylko ograniczenie liczby zapytań
+#   rules       — detekcja heurystyczna (UA, nagłówki, częstotliwość)
+#   ml          — Random Forest na cechach zapytania
+#   llm         — analiza przez Claude (claude-haiku-4-5)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: protection-config
+  namespace: aisys-protection
+data:
+  PROTECTION_STRATEGY: "ml"
+  RATE_LIMIT_RPM: "60"
+  DETECTION_THRESHOLD: "0.7"
+  WEBAPP_URL: "http://webapp-svc.aisys-webapp.svc.cluster.local:8080"
+  REDIS_URL: "redis://redis-svc.aisys-protection.svc.cluster.local:6379"

@@ -1,0 +1,12 @@
+# Stała część eksperymentu — zmieniaj tylko replicas w deployment.yaml
+# ATTACK_TYPE: form_spam | login_bruteforce | mixed
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bots-config
+  namespace: aisys-bots
+data:
+  TARGET_URL: "http://ai-protection-svc.aisys-protection.svc.cluster.local:8000"
+  REQUESTS_PER_SECOND: "2.0"
+  ATTACK_TYPE: "form_spam"
+  THREAD_COUNT: "3"
