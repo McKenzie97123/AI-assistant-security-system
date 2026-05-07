@@ -10,3 +10,6 @@ data:
   REQUESTS_PER_SECOND: "2.0"
   ATTACK_TYPE: "form_spam"
   THREAD_COUNT: "3"
+  # true  → bot pobiera CSRF token i rozwiązuje CAPTCHA (zaawansowany atak)
+  # false → naiwny bot bez tokenów (odrzucony już przez webapp)
+  BYPASS_PROTECTION: "true"

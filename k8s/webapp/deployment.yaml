@@ -19,6 +19,9 @@ spec:
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: webapp-config
           resources:
             requests:
               cpu: "100m"
