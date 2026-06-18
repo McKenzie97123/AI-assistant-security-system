@@ -180,23 +180,43 @@ Rysunek 3.2 Aplikacja webowa stanowiąca cel ataku — formularze kontaktowy i l
 
 3.3.2 Warstwa ochronna (proxy AI) 
 
-Warstwa ochronna jest kluczowym, badanym elementem systemu i została zaimplementowana w postaci asynchronicznego serwera pośredniczącego z wykorzystaniem frameworka FastAPI oraz serwera ASGI Uvicorn. Komponent ten realizuje dwie funkcje, czyli analizę przychodzących żądań oraz — w przypadku ich akceptacji — przekazywanie ich do aplikacji webowej. Jego sercem jest moduł analizatora (`RequestAnalyzer`), który dla każdego żądania wyznacza wektor cech, a następnie, w zależności od aktywnej strategii, klasyfikuje żądanie jako pochodzące od człowieka lub od bota. Wyznaczane cechy obejmują adres IP klienta, metodę i ścieżkę żądania, nagłówek User-Agent, typ zawartości, liczbę żądań na minutę z danego adresu IP przechowywaną w bazie Redis, obecność nagłówków `Accept` i `Accept-Language` oraz rozmiar treści żądania. 
+Warstwa ochronna jest kluczowym, badanym elementem systemu i została zaimplementowana w postaci asynchronicznego serwera pośredniczącego z wykorzystaniem frameworka FastAPI oraz serwera ASGI Uvicorn. Komponent ten realizuje dwie funkcje, czyli analizę przychodzących żądań oraz — w przypadku ich akceptacji — przekazywanie ich do aplikacji webowej. Jego sercem jest moduł analizatora (`RequestAnalyzer`), który dla każdego żądania wyznacza wektor cech, a następnie, w zależności od aktywnej strategii, klasyfikuje żądanie jako pochodzące od człowieka lub od bota. Wyznaczane cechy obejmują adres IP klienta, metodę i ścieżkę żądania, nagłówek User-Agent, typ zawartości, liczbę żądań na minutę z danego adresu IP przechowywaną w bazie Redis, obecność nagłówków `Accept` i `Accept-Language` oraz rozmiar treści żądania. Przykładowy dziennik zdarzeń warstwy ochronnej, ilustrujący decyzje podejmowane dla kolejnych żądań HTTP, przedstawia rysunek 3.3. 
+
+![Rysunek 3.3 Dziennik zdarzeń warstwy ochronnej](results/screenshots/proxy_logs.png) 
+
+Rysunek 3.3 Dziennik zdarzeń warstwy ochronnej — decyzje podejmowane dla kolejnych żądań HTTP wraz z wyznaczonym wynikiem (score) oraz przyczyną blokady 
 
 3.3.3 Boty spamerskie 
 
-Boty spamerskie stanowią stały, kontrolowany model ataku i również zostały zaimplementowane w języku Python, z wykorzystaniem biblioteki `requests`. Każda instancja bota uruchamia konfigurowalną liczbę wątków, z których każdy posiada własną sesję HTTP, a więc własne ciasteczka i token CSRF. Boty zaprojektowano w wariancie zaawansowanym, ponieważ przed wysłaniem żądania POST bot pobiera stronę główną, parsuje kod HTML w poszukiwaniu tokenu CSRF oraz treści zadania CAPTCHA, rozwiązuje działanie arytmetyczne i dołącza poprawne wartości do żądania. Dzięki temu skutecznie omijają one klasyczne mechanizmy ochrony aplikacji, co odzwierciedla realne zagrożenie ze strony współczesnych, zautomatyzowanych narzędzi i pozwala skupić ocenę skuteczności na badanej warstwie sztucznej inteligencji, a nie na zabezpieczeniach klasycznych. Boty obsługują trzy typy ataku, którymi są masowe wysyłanie formularzy (`form_spam`), atak słownikowy na logowanie (`login_bruteforce`) oraz tryb mieszany (`mixed`). 
+Boty spamerskie stanowią stały, kontrolowany model ataku i również zostały zaimplementowane w języku Python, z wykorzystaniem biblioteki `requests`. Każda instancja bota uruchamia konfigurowalną liczbę wątków, z których każdy posiada własną sesję HTTP, a więc własne ciasteczka i token CSRF. Boty zaprojektowano w wariancie zaawansowanym, ponieważ przed wysłaniem żądania POST bot pobiera stronę główną, parsuje kod HTML w poszukiwaniu tokenu CSRF oraz treści zadania CAPTCHA, rozwiązuje działanie arytmetyczne i dołącza poprawne wartości do żądania. Dzięki temu skutecznie omijają one klasyczne mechanizmy ochrony aplikacji, co odzwierciedla realne zagrożenie ze strony współczesnych, zautomatyzowanych narzędzi i pozwala skupić ocenę skuteczności na badanej warstwie sztucznej inteligencji, a nie na zabezpieczeniach klasycznych. Boty obsługują trzy typy ataku, którymi są masowe wysyłanie formularzy (`form_spam`), atak słownikowy na logowanie (`login_bruteforce`) oraz tryb mieszany (`mixed`). Przykładowy dziennik pracy botów w trakcie ataku, wraz ze zwracanymi przez warstwę ochronną kodami odpowiedzi, przedstawia rysunek 3.4. 
+
+![Rysunek 3.4 Dziennik zdarzeń botów spamerskich](results/screenshots/bots_logs.png) 
+
+Rysunek 3.4 Dziennik zdarzeń botów spamerskich — kolejne żądania POST oraz zwracane przez warstwę ochronną kody odpowiedzi HTTP (200 dla żądań przepuszczonych, 429 dla zablokowanych) 
 
 3.3.4 Magazyn stanu — Redis 
 
-Magazyn stanu zapewnia baza Redis, która pełni rolę szybkiego, ulotnego repozytorium współdzielonego pomiędzy instancjami warstwy ochronnej. Wykorzystywana jest ona do implementacji okna czasowego zliczającego liczbę żądań z danego adresu IP w jednominutowych przedziałach, czyli mechanizmu okna przesuwnego. Dzięki centralizacji tego licznika w bazie Redis mechanizm ograniczania liczby zapytań działa spójnie nawet przy skalowaniu warstwy ochronnej do wielu replik. 
+Magazyn stanu zapewnia baza Redis, która pełni rolę szybkiego, ulotnego repozytorium współdzielonego pomiędzy instancjami warstwy ochronnej. Wykorzystywana jest ona do implementacji okna czasowego zliczającego liczbę żądań z danego adresu IP w jednominutowych przedziałach, czyli mechanizmu okna przesuwnego. Dzięki centralizacji tego licznika w bazie Redis mechanizm ograniczania liczby zapytań działa spójnie nawet przy skalowaniu warstwy ochronnej do wielu replik. Zawartość bazy Redis z kluczami okna przesuwnego, tworzonymi dla poszczególnych adresów IP, przedstawia rysunek 3.5. 
+
+![Rysunek 3.5 Zawartość bazy Redis](results/screenshots/redis_cli.png) 
+
+Rysunek 3.5 Zawartość bazy Redis — klucze okna przesuwnego (`rate:<ip>:<minuta>`) zliczające liczbę żądań z poszczególnych adresów IP w jednominutowych przedziałach 
 
 3.3.5 Model językowy — Ollama 
 
-Lokalny model sztucznej inteligencji udostępnia serwer Ollama, na którym uruchomiono model `llama3.2:1b` o rozmiarze około 600 MB i miliardzie parametrów, wykorzystywany przez strategię opartą na dużym modelu językowym. Model działa w pełni lokalnie, w obrębie klastra, bez dostępu do internetu po pierwszym pobraniu oraz bez kosztów licencyjnych i bez konieczności posiadania klucza API. Warstwa ochronna komunikuje się z nim poprzez interfejs REST, przesyłając cechy żądania w formacie tekstowym i oczekując odpowiedzi w postaci klasyfikacji (BOT lub HUMAN) wraz z wynikiem liczbowym. Zastosowanie modelu lokalnego zapewnia przy tym powtarzalność eksperymentu oraz pełną kontrolę nad środowiskiem. 
+Lokalny model sztucznej inteligencji udostępnia serwer Ollama, na którym uruchomiono model `llama3.2:1b` o rozmiarze około 600 MB i miliardzie parametrów, wykorzystywany przez strategię opartą na dużym modelu językowym. Model działa w pełni lokalnie, w obrębie klastra, bez dostępu do internetu po pierwszym pobraniu oraz bez kosztów licencyjnych i bez konieczności posiadania klucza API. Warstwa ochronna komunikuje się z nim poprzez interfejs REST, przesyłając cechy żądania w formacie tekstowym i oczekując odpowiedzi w postaci klasyfikacji (BOT lub HUMAN) wraz z wynikiem liczbowym. Zastosowanie modelu lokalnego zapewnia przy tym powtarzalność eksperymentu oraz pełną kontrolę nad środowiskiem. Przykładową odpowiedź modelu, zwróconą przez serwer Ollama dla pojedynczego żądania, przedstawia rysunek 3.6. 
+
+![Rysunek 3.6 Odpowiedź lokalnego modelu językowego](results/screenshots/ollama_response.png) 
+
+Rysunek 3.6 Odpowiedź lokalnego modelu językowego (Ollama, `llama3.2:1b`) — klasyfikacja żądania w postaci `BOT:<score>` lub `HUMAN:<score>` zwrócona poprzez interfejs REST 
 
 3.3.6 Warstwa monitoringu — Prometheus i Grafana 
 
-Obserwowalność systemu zapewnia para narzędzi w postaci Prometheusa oraz Grafany. Warstwa ochronna udostępnia metryki w formacie Prometheus pod ścieżką `/metrics`, którą Prometheus cyklicznie, co dziesięć sekund, odpytuje, gromadząc dane w wewnętrznej bazie szeregów czasowych, natomiast Grafana wizualizuje zgromadzone metryki w postaci interaktywnego pulpitu (ang. dashboard) odświeżanego również co dziesięć sekund. Rejestrowane są przy tym trzy zasadnicze metryki, czyli licznik żądań z podziałem na wynik (`proxy_requests_total`), histogram opóźnienia detekcji (`proxy_detection_latency_seconds`) oraz licznik blokad z podziałem na metodę detekcji (`proxy_blocked_by_method_total`). 
+Obserwowalność systemu zapewnia para narzędzi w postaci Prometheusa oraz Grafany. Warstwa ochronna udostępnia metryki w formacie Prometheus pod ścieżką `/metrics`, którą Prometheus cyklicznie, co dziesięć sekund, odpytuje, gromadząc dane w wewnętrznej bazie szeregów czasowych, natomiast Grafana wizualizuje zgromadzone metryki w postaci interaktywnego pulpitu (ang. dashboard) odświeżanego również co dziesięć sekund. Rejestrowane są przy tym trzy zasadnicze metryki, czyli licznik żądań z podziałem na wynik (`proxy_requests_total`), histogram opóźnienia detekcji (`proxy_detection_latency_seconds`) oraz licznik blokad z podziałem na metodę detekcji (`proxy_blocked_by_method_total`). Konsolę Prometheusa z listą monitorowanych celów, potwierdzającą poprawne pobieranie metryk z warstwy ochronnej, przedstawia rysunek 3.7. 
+
+![Rysunek 3.7 Konsola Prometheusa z listą monitorowanych celów](results/screenshots/prometheus_targets.png) 
+
+Rysunek 3.7 Konsola Prometheusa — lista monitorowanych celów (ang. targets) potwierdzająca cykliczne pobieranie metryk z warstwy ochronnej w odstępach dziesięciosekundowych 
 
 3.4 Strategie detekcji 
 
@@ -406,6 +426,11 @@ Spis ilustracji i listingów
 
 3.1 Schemat architektury środowiska badawczego, 
 3.2 Aplikacja webowa stanowiąca cel ataku, 
+3.3 Dziennik zdarzeń warstwy ochronnej, 
+3.4 Dziennik zdarzeń botów spamerskich, 
+3.5 Zawartość bazy Redis — klucze okna przesuwnego, 
+3.6 Odpowiedź lokalnego modelu językowego (Ollama), 
+3.7 Konsola Prometheusa z listą monitorowanych celów, 
 5.1 Skuteczność detekcji botów według strategii ochrony, 
 5.2 Średnie opóźnienie detekcji według strategii ochrony, 
 5.3 Przepustowość warstwy ochronnej według strategii ochrony, 
