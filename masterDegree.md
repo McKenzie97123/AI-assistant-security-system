@@ -192,7 +192,7 @@ Boty spamerskie stanowią stały, kontrolowany model ataku i również zostały 
 
 ![Rysunek 3.4 Dziennik zdarzeń botów spamerskich](results/screenshots/bots_logs.png) 
 
-Rysunek 3.4 Dziennik zdarzeń botów spamerskich — kolejne żądania POST oraz zwracane przez warstwę ochronną kody odpowiedzi HTTP (200 dla żądań przepuszczonych, 429 dla zablokowanych) 
+Rysunek 3.4 Dziennik zdarzeń botów spamerskich — kolejne próby wysłania formularza (`/contact`) odrzucane przez warstwę ochronną kodem HTTP 429 (Too Many Requests) 
 
 3.3.4 Magazyn stanu — Redis 
 
