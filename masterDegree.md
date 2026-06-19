@@ -212,11 +212,11 @@ Rysunek 3.6 Odpowiedź lokalnego modelu językowego (Ollama, `llama3.2:1b`) — 
 
 3.3.6 Warstwa monitoringu — Prometheus i Grafana 
 
-Obserwowalność systemu zapewnia para narzędzi w postaci Prometheusa oraz Grafany. Warstwa ochronna udostępnia metryki w formacie Prometheus pod ścieżką `/metrics`, którą Prometheus cyklicznie, co dziesięć sekund, odpytuje, gromadząc dane w wewnętrznej bazie szeregów czasowych, natomiast Grafana wizualizuje zgromadzone metryki w postaci interaktywnego pulpitu (ang. dashboard) odświeżanego również co dziesięć sekund. Rejestrowane są przy tym trzy zasadnicze metryki, czyli licznik żądań z podziałem na wynik (`proxy_requests_total`), histogram opóźnienia detekcji (`proxy_detection_latency_seconds`) oraz licznik blokad z podziałem na metodę detekcji (`proxy_blocked_by_method_total`). Konsolę Prometheusa z listą monitorowanych celów, potwierdzającą poprawne pobieranie metryk z warstwy ochronnej, przedstawia rysunek 3.7. 
+Obserwowalność systemu zapewnia para narzędzi w postaci Prometheusa oraz Grafany. Warstwa ochronna udostępnia metryki w formacie Prometheus pod ścieżką `/metrics`, którą Prometheus cyklicznie, co dziesięć sekund, odpytuje, gromadząc dane w wewnętrznej bazie szeregów czasowych, natomiast Grafana wizualizuje zgromadzone metryki w postaci interaktywnego pulpitu (ang. dashboard) odświeżanego również co dziesięć sekund. Rejestrowane są przy tym trzy zasadnicze metryki, czyli licznik żądań z podziałem na wynik (`proxy_requests_total`), histogram opóźnienia detekcji (`proxy_detection_latency_seconds`) oraz licznik blokad z podziałem na metodę detekcji (`proxy_blocked_by_method_total`). Przykładową konsolę Prometheusa z wynikami zapytań PromQL — tempem żądań w podziale na wynik oraz tempem blokad według metody detekcji w funkcji czasu — przedstawia rysunek 3.7. 
 
-![Rysunek 3.7 Konsola Prometheusa z listą monitorowanych celów](results/screenshots/prometheus_targets.png) 
+![Rysunek 3.7 Konsola Prometheusa z wynikami zapytań PromQL](results/screenshots/prometheus_targets.png) 
 
-Rysunek 3.7 Konsola Prometheusa — lista monitorowanych celów (ang. targets) potwierdzająca cykliczne pobieranie metryk z warstwy ochronnej w odstępach dziesięciosekundowych 
+Rysunek 3.7 Konsola Prometheusa — wyniki zapytań PromQL: tempo żądań w podziale na wynik (allowed/blocked) oraz tempo blokad według metody detekcji w funkcji czasu 
 
 3.4 Strategie detekcji 
 
@@ -430,7 +430,7 @@ Spis ilustracji i listingów
 3.4 Dziennik zdarzeń botów spamerskich, 
 3.5 Zawartość bazy Redis — klucze okna przesuwnego, 
 3.6 Odpowiedź lokalnego modelu językowego (Ollama), 
-3.7 Konsola Prometheusa z listą monitorowanych celów, 
+3.7 Konsola Prometheusa z wynikami zapytań PromQL, 
 5.1 Skuteczność detekcji botów według strategii ochrony, 
 5.2 Średnie opóźnienie detekcji według strategii ochrony, 
 5.3 Przepustowość warstwy ochronnej według strategii ochrony, 
