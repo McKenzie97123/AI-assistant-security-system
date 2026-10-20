@@ -2,9 +2,11 @@
 """Generuje wykresy do pracy dyplomowej na podstawie results/results.csv."""
 import csv
 import os
+import statistics
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.ticker import FuncFormatter
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CSV = os.path.join(HERE, "results", "results.csv")
@@ -28,6 +30,25 @@ def f(x):
     except (ValueError, TypeError):
         return 0.0
 
+
+runs = {}
+with open(os.path.join(HERE, "results", "runs_raw.csv")) as fh:
+    for r in csv.DictReader(fh):
+        runs.setdefault((r["strategy"], int(r["bots"])), []).append(r)
+
+
+def sd(r, col, scale=1.0):
+    """Odchylenie standardowe z próby dla konfiguracji wiersza r (runs_raw.csv)."""
+    return statistics.stdev(f(x[col]) * scale for x in runs[(r["strategy"], int(r["bots"]))])
+
+
+def pl(v, decimals):
+    return f"{v:.{decimals}f}".replace(".", ",")
+
+
+comma = FuncFormatter(lambda v, _: f"{v:g}".replace(".", ","))
+ERR = dict(capsize=6, ecolor="#2c3e50", elinewidth=1.2)
+
 # Seria 1: porównanie strategii przy 3 botach
 comp = [r for r in rows if int(r["bots"]) == 3]
 comp_order = ["rate_limit", "rules", "ml", "llm"]
@@ -36,38 +57,43 @@ comp = sorted(comp, key=lambda r: comp_order.index(r["strategy"]) if r["strategy
 # --- Wykres 1: wskaźnik blokowania wg strategii ---
 labels = [STRAT_PL.get(r["strategy"], r["strategy"]) for r in comp]
 block = [f(r["block_rate"]) * 100 for r in comp]
+block_sd = [sd(r, "block_rate", 100) for r in comp]
 plt.figure(figsize=(8, 5))
-bars = plt.bar(labels, block, color=["#7f8c8d", "#2980b9", "#27ae60", "#8e44ad"])
+bars = plt.bar(labels, block, yerr=block_sd, error_kw=ERR, color=["#7f8c8d", "#2980b9", "#27ae60", "#8e44ad"])
 plt.ylabel("Wskaźnik blokowania [%]")
-plt.title("Skuteczność detekcji botów wg strategii ochrony (3 boty)")
-plt.ylim(0, 105)
-for b, v in zip(bars, block):
-    plt.text(b.get_x() + b.get_width() / 2, v + 1.5, f"{v:.1f}%", ha="center", fontweight="bold")
+plt.title("Skuteczność detekcji botów wg strategii ochrony (3 repliki botów)")
+plt.ylim(0, 108)
+for b, v, e in zip(bars, block, block_sd):
+    plt.text(b.get_x() + b.get_width() / 2, v + e + 1.5, f"{pl(v, 1)}%", ha="center", fontweight="bold")
 plt.tight_layout()
 plt.savefig(os.path.join(OUT, "fig1_block_rate.png"), dpi=150)
 plt.close()
 
 # --- Wykres 2: opóźnienie detekcji (skala log) wg strategii ---
 lat = [f(r["avg_lat_ms"]) for r in comp]
+lat_sd = [sd(r, "avg_lat_ms") for r in comp]
 plt.figure(figsize=(8, 5))
-bars = plt.bar(labels, lat, color=["#7f8c8d", "#2980b9", "#27ae60", "#8e44ad"])
+bars = plt.bar(labels, lat, yerr=lat_sd, error_kw=ERR, color=["#7f8c8d", "#2980b9", "#27ae60", "#8e44ad"])
 plt.ylabel("Średnie opóźnienie detekcji [ms] (skala log.)")
-plt.title("Opóźnienie detekcji wg strategii ochrony (3 boty)")
+plt.title("Opóźnienie detekcji wg strategii ochrony (3 repliki botów)")
 plt.yscale("log")
-for b, v in zip(bars, lat):
-    plt.text(b.get_x() + b.get_width() / 2, v * 1.1, f"{v:.2f} ms", ha="center", fontweight="bold")
+plt.ylim(top=max(v + e for v, e in zip(lat, lat_sd)) * 4)
+for b, v, e in zip(bars, lat, lat_sd):
+    plt.text(b.get_x() + b.get_width() / 2, (v + e) * 1.15, f"{pl(v, 2)} ms", ha="center", fontweight="bold")
 plt.tight_layout()
 plt.savefig(os.path.join(OUT, "fig2_latency.png"), dpi=150)
 plt.close()
 
 # --- Wykres 3: przepustowość wg strategii ---
 thr = [f(r["rps_total"]) for r in comp]
+thr_sd = [sd(r, "rps_total") for r in comp]
 plt.figure(figsize=(8, 5))
-bars = plt.bar(labels, thr, color=["#7f8c8d", "#2980b9", "#27ae60", "#8e44ad"])
+bars = plt.bar(labels, thr, yerr=thr_sd, error_kw=ERR, color=["#7f8c8d", "#2980b9", "#27ae60", "#8e44ad"])
 plt.ylabel("Przepustowość [żądań/s]")
-plt.title("Przepustowość warstwy ochronnej wg strategii (3 boty)")
-for b, v in zip(bars, thr):
-    plt.text(b.get_x() + b.get_width() / 2, v + 0.3, f"{v:.1f}", ha="center", fontweight="bold")
+plt.title("Przepustowość warstwy ochronnej wg strategii (3 repliki botów)")
+plt.gca().yaxis.set_major_formatter(comma)
+for b, v, e in zip(bars, thr, thr_sd):
+    plt.text(b.get_x() + b.get_width() / 2, v + e + 0.3, pl(v, 1), ha="center", fontweight="bold")
 plt.tight_layout()
 plt.savefig(os.path.join(OUT, "fig3_throughput.png"), dpi=150)
 plt.close()
@@ -78,17 +104,20 @@ bots = [int(r["bots"]) for r in scal]
 s_block = [f(r["block_rate"]) * 100 for r in scal]
 s_thr = [f(r["rps_total"]) for r in scal]
 s_lat = [f(r["avg_lat_ms"]) for r in scal]
+s_block_sd = [sd(r, "block_rate", 100) for r in scal]
+s_thr_sd = [sd(r, "rps_total") for r in scal]
+s_lat_sd = [sd(r, "avg_lat_ms") for r in scal]
 
 # --- Wykres 4: skalowalność — blokowanie i przepustowość vs liczba botów ---
 fig, ax1 = plt.subplots(figsize=(8, 5))
 ax1.set_xlabel("Liczba replik botów")
 ax1.set_ylabel("Wskaźnik blokowania [%]", color="#27ae60")
-ax1.plot(bots, s_block, "o-", color="#27ae60", linewidth=2, markersize=8, label="Wskaźnik blokowania")
+ax1.errorbar(bots, s_block, yerr=s_block_sd, fmt="o-", color="#27ae60", capsize=6, linewidth=2, markersize=8, label="Wskaźnik blokowania")
 ax1.set_ylim(0, 105)
 ax1.tick_params(axis="y", labelcolor="#27ae60")
 ax2 = ax1.twinx()
 ax2.set_ylabel("Przepustowość [żądań/s]", color="#c0392b")
-ax2.plot(bots, s_thr, "s--", color="#c0392b", linewidth=2, markersize=8, label="Przepustowość")
+ax2.errorbar(bots, s_thr, yerr=s_thr_sd, fmt="s--", color="#c0392b", capsize=6, linewidth=2, markersize=8, label="Przepustowość")
 ax2.tick_params(axis="y", labelcolor="#c0392b")
 plt.title("Skalowalność ataku — strategia uczenia maszynowego (ml)")
 fig.tight_layout()
@@ -97,12 +126,13 @@ plt.close()
 
 # --- Wykres 5: skalowalność — opóźnienie vs liczba botów ---
 plt.figure(figsize=(8, 5))
-plt.plot(bots, s_lat, "o-", color="#2980b9", linewidth=2, markersize=8)
+plt.errorbar(bots, s_lat, yerr=s_lat_sd, fmt="o-", color="#2980b9", capsize=6, linewidth=2, markersize=8)
 plt.xlabel("Liczba replik botów")
 plt.ylabel("Średnie opóźnienie detekcji [ms]")
 plt.title("Opóźnienie detekcji w funkcji intensywności ataku (ml)")
+plt.gca().yaxis.set_major_formatter(comma)
 for x, y in zip(bots, s_lat):
-    plt.text(x, y, f" {y:.2f} ms", va="bottom")
+    plt.text(x, y, f"  {pl(y, 2)} ms", va="bottom")
 plt.tight_layout()
 plt.savefig(os.path.join(OUT, "fig5_scalability_latency.png"), dpi=150)
 plt.close()

@@ -1,11 +1,24 @@
 #!/usr/bin/env python3
 """Renderuje tabele pracy jako grafiki -> results/table_*.png"""
+import csv
 import os
+import statistics
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "results")
+
+runs = {}
+with open(os.path.join(OUT, "runs_raw.csv")) as fh:
+    for r in csv.DictReader(fh):
+        runs.setdefault((r["strategy"], int(r["bots"])), []).append(r)
+
+
+def pm(strategy, bots, col, decimals, scale=1.0):
+    """Średnia ± odchylenie standardowe z próby, z przecinkiem dziesiętnym."""
+    x = [float(r[col]) * scale for r in runs[(strategy, bots)]]
+    return f"{statistics.mean(x):.{decimals}f} ± {statistics.stdev(x):.{decimals}f}".replace(".", ",")
 
 HEADER = "#2c3e50"
 ROW_A = "#f4f6f7"
@@ -34,7 +47,7 @@ def render(filename, columns, rows, title, col_widths=None):
         if r == 0:
             cell.set_facecolor(HEADER)
             cell.set_text_props(color="white", fontweight="bold")
-            cell.set_height(cell.get_height() * 1.15)
+            cell.set_height(cell.get_height() * 1.6)
         else:
             cell.set_facecolor(ROW_A if r % 2 else ROW_B)
 
@@ -63,29 +76,33 @@ render(
 )
 
 # Tabela 5.1 — porównanie strategii (3 boty)
+STRATEGIES = [
+    ("rate_limit", "Ograniczanie liczby zapytań", 1, 2),
+    ("rules", "Detekcja heurystyczna", 1, 2),
+    ("ml", "Uczenie maszynowe", 1, 2),
+    ("llm", "Model językowy (LLM)", 2, 1),
+]
 render(
     "table_5_1.png",
-    ["Strategia", "Zapytania", "Zablokowane", "Wskaźnik\nblokowania", "Przepustowość\n[żądań/s]", "Średnie\nopóźnienie [ms]"],
+    ["Strategia", "Zapytania", "Zablokowane", "Wskaźnik\nblokowania [%]", "Przepustowość\n[żądań/s]", "Średnie\nopóźnienie [ms]"],
     [
-        ["Ograniczanie liczby zapytań", "2677", "2060", "77,9%", "19,0", "3,05"],
-        ["Detekcja heurystyczna", "1686", "1566", "92,9%", "18,4", "2,36"],
-        ["Uczenie maszynowe", "1701", "1509", "88,7%", "18,7", "4,56"],
-        ["Model językowy (LLM)", "321", "0", "0,0%", "2,66", "9664,59"],
+        [name, pm(s, 3, "total", 0), pm(s, 3, "blocked", 0), pm(s, 3, "block_rate", 1, 100),
+         pm(s, 3, "rps_total", thr_dec), pm(s, 3, "avg_lat_ms", lat_dec)]
+        for s, name, thr_dec, lat_dec in STRATEGIES
     ],
-    "Tabela 5.1  Porównanie strategii ochrony przy stałej liczbie trzech replik botów",
-    col_widths=[0.26, 0.13, 0.14, 0.15, 0.16, 0.16],
+    "Tabela 5.1  Porównanie strategii ochrony przy stałej liczbie trzech replik botów\n(średnia ± odchylenie standardowe, n = 3)",
+    col_widths=[0.24, 0.13, 0.13, 0.16, 0.16, 0.18],
 )
 
 # Tabela 5.2 — skalowalność (ml)
 render(
     "table_5_2.png",
-    ["Repliki botów", "Zapytania", "Wskaźnik\nblokowania", "Przepustowość\n[żądań/s]", "Średnie\nopóźnienie [ms]"],
+    ["Repliki botów", "Zapytania", "Wskaźnik\nblokowania [%]", "Przepustowość\n[żądań/s]", "Średnie\nopóźnienie [ms]"],
     [
-        ["1", "925", "86,8%", "6,2", "3,71"],
-        ["3", "1701", "88,7%", "18,7", "4,56"],
-        ["5", "2887", "83,3%", "30,7", "4,90"],
-        ["10", "5721", "87,3%", "61,3", "4,57"],
+        [str(b), pm("ml", b, "total", 0), pm("ml", b, "block_rate", 1, 100),
+         pm("ml", b, "rps_total", 1), pm("ml", b, "avg_lat_ms", 2)]
+        for b in (1, 3, 5, 10)
     ],
-    "Tabela 5.2  Skalowalność ataku dla strategii uczenia maszynowego",
+    "Tabela 5.2  Skalowalność ataku dla strategii uczenia maszynowego\n(średnia ± odchylenie standardowe, n = 3)",
     col_widths=[0.2, 0.2, 0.2, 0.2, 0.2],
 )
